@@ -3,6 +3,8 @@ layout: full
 ---
 
 ```datacorejsx
-const { View } = await dc.require(dc.resolvePath("REVERSE FLIGHT/src/index.jsx"));
-return <View />;
+const currentFilePath = dc.useCurrentPath();
+const folderPath = currentFilePath ? currentFilePath.substring(0, currentFilePath.lastIndexOf("/")) : "";
+const { View } = await dc.require(folderPath + "/src/index.jsx");
+return await View({ folderPath, dc });
 ```

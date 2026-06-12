@@ -1,44 +1,78 @@
-const { useState, useEffect, useRef } = dc;
+// App.jsx - Coordinator for Reverse Flight
+function App(props) {
+    const { folderPath, dc, isFullTab, isInception, onToggleFullTab, ...rest } = props;
+    const { useState, useEffect, useRef } = dc;
 
-const { findNearestAncestorWithClass, findDirectChildByClass } = await dc.require(dc.resolvePath("REVERSE FLIGHT/src/utils/domUtils.jsx"));
-const { STYLES } = await dc.require(dc.resolvePath("REVERSE FLIGHT/src/styles/styles.jsx"));
-const { FlightComponent } = await dc.require(dc.resolvePath("REVERSE FLIGHT/src/components/FlightComponent.jsx"));
-const { getLoader } = await dc.require(dc.resolvePath("REVERSE FLIGHT/src/utils/loadScript.js"));
+    const [modules, setModules] = useState(null);
+    const [error, setError] = useState(null);
 
-const folderPath = dc.resolvePath("REVERSE FLIGHT");
-const { loadScript } = getLoader(folderPath);
-
-const App = (props) => {
-    const { isInception = false } = props;
-    const [key, setKey] = useState(0);
-    const [isFullTab, setIsFullTab] = useState(!isInception);
     const containerRef = useRef(null);
     const stateRefs = useRef({}).current;
 
-    const handleCodeReload = () => {
-        setKey((prev) => prev + 1);
-        if (dc.app.workspace.activeLeaf?.rebuildView) {
-            dc.app.workspace.activeLeaf.rebuildView();
+    function findNearestAncestorWithClass(element, className) {
+        if (!element) return null;
+        let current = element.parentNode;
+        while (current) {
+            if (current.classList && current.classList.contains(className)) {
+                return current;
+            }
+            current = current.parentNode;
         }
-    };
+        return null;
+    }
 
-    const toggleFullTab = () => {
-        if (isInception) return;
-        setIsFullTab(!isFullTab);
-    };
+    function findDirectChildByClass(parent, className) {
+        if (!parent) return null;
+        for (let i = 0; i < parent.children.length; i++) {
+            const child = parent.children[i];
+            if (child.classList && child.classList.contains(className)) {
+                return child;
+            }
+        }
+        return null;
+    }
 
-    // Full-tab mode lifecycle
-    useEffect(() => {
-        if (!isFullTab || isInception) return;
+    // Load modules
+    useEffect(function () {
+        async function loadModules() {
+            try {
+                const domUtilsPath = folderPath + "/src/utils/domUtils.jsx";
+                const stylesPath = folderPath + "/src/styles/styles.jsx";
+                const componentPath = folderPath + "/src/components/FlightComponent.jsx";
+                const loadScriptPath = folderPath + "/src/utils/loadScript.js";
+
+                const [domUtils, stylesModule, componentModule, loadScriptModule] = await Promise.all([
+                    dc.require(domUtilsPath),
+                    dc.require(stylesPath),
+                    dc.require(componentPath),
+                    dc.require(loadScriptPath)
+                ]);
+
+                const { getLoader } = loadScriptModule;
+                const { loadScript } = getLoader(folderPath);
+
+                setModules({
+                    STYLES: stylesModule.STYLES,
+                    FlightComponent: componentModule.FlightComponent,
+                    loadScript: loadScript
+                });
+            } catch (e) {
+                console.error("App module loading failed:", e);
+                setError(e);
+            }
+        }
+        loadModules();
+    }, [folderPath]);
+
+    // DOM Reparenting for Full-tab Mode
+    useEffect(function () {
+        if (!isFullTab || isInception || !modules) return;
 
         const container = containerRef.current;
         if (!container) return;
 
         const targetPaneContent = findNearestAncestorWithClass(container, "workspace-leaf-content");
-        if (!targetPaneContent) {
-            setIsFullTab(false);
-            return;
-        }
+        if (!targetPaneContent) return;
 
         const contentWrapper = findDirectChildByClass(targetPaneContent, "view-content") || targetPaneContent;
         const currentParent = container.parentNode;
@@ -70,7 +104,7 @@ const App = (props) => {
         contentWrapper.appendChild(container);
 
         // Edge-to-edge styling
-        requestAnimationFrame(() => {
+        requestAnimationFrame(function () {
             Object.assign(contentWrapper.style, {
                 padding: "0",
                 margin: "0",
@@ -93,8 +127,8 @@ const App = (props) => {
             backgroundColor: "#000000",
         });
 
-        return () => {
-            console.log("Datacore: Cleaning up Full Tab Mode (ReverseFlight)");
+        return function () {
+            console.log("Datacore: Cleaning up Full Tab Mode (ReverseFlight App)");
             if (stateRefs.placeholder?.parentNode) {
                 stateRefs.placeholder.parentNode.replaceChild(container, stateRefs.placeholder);
             } else if (stateRefs.originalParent) {
@@ -107,44 +141,41 @@ const App = (props) => {
             }
             container.removeAttribute("style");
         };
-    }, [isFullTab, isInception]);
+    }, [isFullTab, isInception, !!modules]);
 
-    // Hide status bar when in Full Tab mode
-    useEffect(() => {
-        if (!isFullTab || isInception) return;
+    if (error) {
+        return (
+            <div style={{ color: "var(--text-error, #ef4444)", padding: "20px", fontFamily: "monospace" }}>
+                <h3>Failed to load Reverse Flight component modules:</h3>
+                <pre>{error.stack || error.message}</pre>
+            </div>
+        );
+    }
 
-        const statusBar = document.querySelector('body > .app-container .status-bar');
-        let originalDisplay = '';
+    if (!modules) {
+        return (
+            <div style={{ padding: "20px", color: "var(--text-muted)", fontFamily: "monospace" }}>
+                Initializing Reverse Flight dependencies...
+            </div>
+        );
+    }
 
-        if (statusBar) {
-            originalDisplay = statusBar.style.display;
-            statusBar.style.display = 'none';
-        }
-
-        return () => {
-            if (statusBar) {
-                statusBar.style.display = originalDisplay;
-            }
-        };
-    }, [isFullTab, isInception]);
-
-    // Force compact if inception is active
-    const effectiveFullTab = isFullTab && !isInception;
+    const { STYLES, FlightComponent, loadScript } = modules;
 
     return (
-        <div ref={containerRef} style={{ width: '100%', height: effectiveFullTab ? '100%' : '600px', backgroundColor: '#000000', borderRadius: effectiveFullTab ? '0' : '8px', overflow: 'hidden' }}>
+        <div ref={containerRef} style={{ width: '100%', height: '100%', backgroundColor: '#000000', overflow: 'hidden' }}>
             <FlightComponent
                 dc={dc}
                 loadScript={loadScript}
-                key={key}
-                onCodeReloadRequest={handleCodeReload}
-                isFullTab={effectiveFullTab}
+                isFullTab={isFullTab}
                 isInception={isInception}
-                onToggleFullTab={toggleFullTab}
+                onToggleFullTab={onToggleFullTab}
                 styles={STYLES}
+                folderPath={folderPath}
+                {...rest}
             />
         </div>
     );
-};
+}
 
 return { App };

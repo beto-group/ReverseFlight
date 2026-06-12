@@ -1,23 +1,41 @@
-# 🛠️ Contributing to Reverse Flight (main)
+# Contribution Guidelines — Reverse Flight
 
-Welcome! This document outlines the core developer standards, unit testing frameworks, and compilation guidelines required to maintain the advanced implementation of the Reverse Flight component.
+Welcome! This component is part of the BetoOS Datacore library. Please adhere to the following architectural standards.
 
----
+## Codebase Architecture
 
-## 🏛️ Core Architecture Pillars
+The module utilizes a split-file structure to guarantee legibility, testability, and isolated execution scopes:
 
-1.  **Full-Pane DOM Interception**:
-    *   The view targets the nearest `.workspace-leaf-content` ancestor and replaces standard Markdown leaves with a full-pane portal overlay.
-    *   Dynamic lifecycle hooks manage mounting and cleanups edge-to-edge.
-2.  **Anti-Bleed Style Isolation**:
-    *   All styles must be scoped tightly under standard container class keys (`.reverse-flight-container`) to avoid spilling into the Obsidian UI or interfering with active user themes.
-3.  **Resilient CDN Cache Caching**:
-    *   Third-party libraries (`three.js`, `lil-gui`) must be loaded using the local `loadScript.js` utility, which manages an offline caching vault under `assets/cache/scripts/` to ensure flawless load times.
-4.  **Polling Hot Reload Daemon**:
-    *   Maintains an active watch interval checking `data/mcp_commands.json` modifications to trigger instant updates during coding sessions.
+```text
+ReverseFlight/
+├── REVERSE FLIGHT.md      # Obsidian entry point
+├── METADATA.md            # Component manifest
+├── README.md              # Documentation
+├── CONTRIBUTION.md        # This file
+├── LICENSE.md             # MIT license
+├── data/
+│   └── mcp_commands.json  # External watch/reload trigger
+├── assets/
+│   ├── image/
+│   │   └── preview_1.webp # Static preview image
+│   ├── videos/
+│   │   └── preview.gif    # Interactive walkthrough GIF
+│   └── cache/             # Local offline-ready CDN scripts caching
+└── src/
+    ├── index.jsx          # Event-driven code watch & reload daemon
+    ├── App.jsx            # Main layout and coordinator
+    ├── components/
+    │   └── FlightComponent.jsx # Core WebGL landscape flight simulation
+    ├── styles/
+    │   └── styles.jsx     # Scoped Javascript design token sheet
+    └── utils/
+        ├── domUtils.jsx   # Workspace leaf node locators
+        └── loadScript.js  # Vault-caching script loader utility
+```
 
----
+## Developer Standards
 
-## 🚀 Local Compilation & Test Loop
-
-*   **Hot Reload Trigger**: During development, update the files in your dev folder. The active daemon polls `data/mcp_commands.json` and updates the React instance inside Obsidian instantly without requiring system restarts.
+1. **Strict Zero Emojis**: All UI elements, buttons, headers, and control indicators must use Lucide vector icons (`<dc.Icon>`) or plain text. Emojis are reserved strictly for documentation.
+2. **Path Safety**: Do not hardcode absolute path strings (e.g. `/Volumes/` or `file:///`). Always resolve vault directories dynamically.
+3. **No-Polling Code Watcher**: The index bootstrapper registers an event listener with `app.vault.on("modify")` targeting files under `ReverseFlight/src/`. This triggers an instant reload of the component's React view when source code modifications are saved, bypassing background CPU polling entirely.
+4. **HMR Command System**: To force a code reload or command watch directory path change remotely via MCP agents, write the reload payload to `data/mcp_commands.json`.
